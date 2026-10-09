@@ -116,6 +116,10 @@ def main():
     k = html.rfind("</body>")
     html = html[:k] + tag + html[k:] if k >= 0 else html + tag
     open(a.out, "w", encoding="utf-8").write(html)
+    # dados.json: só os dados do banco, para saber se houve mudança desde a última publicação
+    core = {"t": t, "p": p, "wk": wk, "rp": st.get("rp"), "log": log[-150:]}
+    open(os.path.join(os.path.dirname(os.path.abspath(a.out)), "dados.json"), "w", encoding="utf-8").write(
+        json.dumps(core, ensure_ascii=False, sort_keys=True, indent=0))
     print("ok:", a.out, "| trechos", len(t), "| PVs", len(p), "| semanas", len(wk), "| lançamentos", len(log), "|", stamp)
 
 
