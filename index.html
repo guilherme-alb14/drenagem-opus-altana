@@ -1296,16 +1296,19 @@ var _spv=null,_spvs=null;function scopePVs(){if(_spv)return _spv;_spv=Object.key
 function inScopePV(k){scopePVs();return !!_spvs[k]}
 /* avanço físico sobre a meta: peso dos serviços concluídos nos trechos da meta e nos seus PVs ÷ peso total da meta */
 var _SW=null;function scopeW(){if(_SW!=null)return _SW;_SW=0;TRE.forEach(function(t){if(inScope(t.id))TSVC.forEach(function(s,i){_SW+=t.w[i]||0})});scopePVs().forEach(function(k){PSVC.forEach(function(s,i){_SW+=PBY[k].w[i]||0})});return _SW}
-function fisMeta(D){var o={done:0,rec:0,tot:scopeW()},a=addDays(D,-7);
-  function add(T,id,s,w){var r=rec(T,id,s);if(stAt(r,D)===2){o.done+=w;if(r&&r.c&&r.c>a&&r.c<=D)o.rec+=w}}
-  TRE.forEach(function(t){if(inScope(t.id))TSVC.forEach(function(s,i){add("t",t.id,s,t.w[i]||0)})});
-  scopePVs().forEach(function(k){PSVC.forEach(function(s,i){add("p",k,s,PBY[k].w[i]||0)})});return o}
+/* desde 05/11/2026 (v56): serviços concluídos fora da meta também somam no avanço da meta (frentes em local seco, 2ª empresa).
+   O denominador continua sendo o peso da meta (LOB); o.fora = parte do realizado que veio de fora da meta. */
+function fisMeta(D){var o={done:0,rec:0,fora:0,tot:scopeW()},a=addDays(D,-7);
+  function add(T,id,s,w,out){var r=rec(T,id,s);if(stAt(r,D)===2){o.done+=w;if(out)o.fora+=w;if(r&&r.c&&r.c>a&&r.c<=D)o.rec+=w}}
+  TRE.forEach(function(t){var out=!inScope(t.id);TSVC.forEach(function(s,i){add("t",t.id,s,t.w[i]||0,out)})});
+  PVS.forEach(function(pv){var out=!inScopePV(pv.id);PSVC.forEach(function(s,i){add("p",pv.id,s,pv.w[i]||0,out)})});return o}
 /* % físico previsto pela planilha na data X: escavação, montagem, reaterro 1ª e 2ª dos trechos da meta, cada um no mês da planilha, + PVs (1º levante no mês da montagem, 2º no mês do reaterro), distribuídos por dia útil no mês */
 function planFis(X){var pm=planFisMonths(),s=0;MONTHS.forEach(function(m){if(!pm[m])return;var a=mStart(m),b=mEnd(m);if(X<a)return;var f=X>=b?1:wdays(a,X)/Math.max(1,wdays(a,b));s+=pm[m]*f});return s/scopeW()*100}
 function re2Part(D){var w=0;TRE.forEach(function(t){if(stAt(rec("t",t.id,"re2"),D)===2)w+=t.w[3]||0});return w/WT*100}
 
 function tDoneDate(id){var mx="",s=CR().s;for(var i=0;i<s.length;i++){var r=rec("t",id,s[i]);if(!r||r.s!==2||!r.c)return null;if(r.c>mx)mx=r.c}return mx}
-function concL(D){var s=0;TRE.forEach(function(t){if(inScope(t.id)&&tDone(t.id,D))s+=t.L});return s}
+function concL(D){var s=0;TRE.forEach(function(t){if(tDone(t.id,D))s+=t.L});return s}
+function concFora(D){var s=0;TRE.forEach(function(t){if(!inScope(t.id)&&tDone(t.id,D))s+=t.L});return s}
 function isLate(id,D,src){var m=rmOf(id,src);return inMeta(m)&&mEnd(m)<D&&!tDone(id,D)}
 function nOverrides(){var n=0;TRE.forEach(function(t){if(rpOf(t.id))n++});return n}
 function planByMonth(src){
@@ -1612,10 +1615,10 @@ function planDefs(){
   var sw=scopeW(),ws={};TRE.forEach(function(t){if(inScope(t.id))TSVC.forEach(function(sv,i){ws[sv]=(ws[sv]||0)+(t.w[i]||0)})});scopePVs().forEach(function(k){PSVC.forEach(function(sv,i){ws[sv]=(ws[sv]||0)+(PBY[k].w[i]||0)})});
   return '<div class="sec"><h3>Como os números do Painel são calculados</h3><ul class="defs">'+
     '<li><b>Meta de dezembro</b>: os '+scopeN()+' trechos da aba ESTUDO ('+fmt0.format(metaL())+' m de rede e ramais) com escavação, montagem, reaterro 1ª e 2ª etapa concluídos até '+br(META.prazo)+', e os PVs desses trechos com 1º e 2º levante.</li>'+
-    '<li><b>Avanço da meta</b>: soma dos pesos dos serviços concluídos (baixa total no app) ÷ peso total da meta. Só conta serviço concluído; volume parcial não entra.</li>'+
+    '<li><b>Avanço da meta</b>: soma dos pesos dos serviços concluídos (baixa total no app) ÷ peso total da meta. Só conta serviço concluído; volume parcial não entra. Desde 05/11/2026, serviço concluído em trecho ou PV fora da meta também soma (frentes em local seco e a segunda empresa); o denominador continua sendo o peso da meta, então o avanço pode passar de 100%.</li>'+
     '<li><b>Avanço previsto</b>: o mesmo cálculo sobre a linha de base, com cada serviço no mês previsto (PV 1º levante no mês da montagem, 2º levante no mês do reaterro), distribuído por dia útil.</li>'+
     '<li><b>Desvio de prazo</b>: realizado − previsto. O atraso equivalente conta os dias úteis desde a data em que o previsto valia o realizado de hoje.</li>'+
-    '<li><b>Trechos concluídos</b>: metros de trecho da meta com os quatro serviços concluídos. O previsto conta o trecho no mês do reaterro.</li>'+
+    '<li><b>Trechos concluídos</b>: metros de trecho com os quatro serviços concluídos, dentro ou fora da meta. O previsto conta o trecho no mês do reaterro.</li>'+
     '<li><b>Ritmo necessário</b>: saldo de metros ÷ dias úteis até o prazo.</li>'+
     '<li><b>Produção semanal</b>: até 03/10, histórico da planilha PRODUTIVIDADE; depois, soma das baixas do app na semana. Meta = meta diária do mês × dias trabalhados.</li>'+
     '<li><b>Avanço sobre a programação</b>: peso dos itens programados concluídos de segunda a sábado ÷ peso dos itens programados. Usa o mesmo peso do avanço da meta e é mostrado em p.p. da meta. Itens já concluídos antes da semana ficam fora da conta; em andamento e concluído depois do sábado valem zero.</li>'+
@@ -1641,7 +1644,7 @@ function renderPlanResumo(){
   var D=UI.D,src=UI.psrc,P=planByMonth(src),LB=planByMonth("lb"),T=metaL(),h="";
   var L0=concL(D),prev=planCum(D,LB),fora=0;TRE.forEach(function(t){if(inScope(t.id)&&!inMeta(pmOf(t.id,src)))fora+=t.L});
   h+='<div class="sec"><h3>Meta de dezembro</h3><div class="hero"><span class="big num">'+fmt0.format(T)+'<small> m</small></span><span class="of">'+scopeN()+' trechos da planilha ESTUDO<br>todos os serviços até <b>'+br(META.prazo)+'</b></span></div>'+
-    '<div class="kv" style="margin-top:10px"><span class="dot" style="background:var(--ok)"></span><span>Concluído em '+brs(D)+'</span><span class="v">'+fmt0.format(L0)+' m · '+fmt1.format(pct(L0,T))+'%</span>'+
+    '<div class="kv" style="margin-top:10px"><span class="dot" style="background:var(--ok)"></span><span>Concluído em '+brs(D)+(concFora(D)>0.5?' (inclui '+fmt0.format(concFora(D))+' m fora da meta)':'')+'</span><span class="v">'+fmt0.format(L0)+' m · '+fmt1.format(pct(L0,T))+'%</span>'+
     '<span class="dot" style="border:1.5px solid var(--m1)"></span><span>Previsto até '+brs(D)+'</span><span class="v">'+fmt0.format(prev)+' m · '+fmt1.format(pct(prev,T))+'%</span>'+
     '<span class="dot" style="background:var(--mlate)"></span><span>Saldo para a meta</span><span class="v">'+fmt0.format(Math.max(0,T-L0))+' m</span></div>'+
     '<p class="note" style="margin-top:8px">Frente final: '+esc(META.fim||"—")+'. Concluído = escavação, montagem, reaterro 1ª e 2ª etapa; os PVs dos trechos também precisam estar concluídos.</p>'+
@@ -2052,10 +2055,10 @@ var _rdT;function renderDash(){
   var h='';
   /* 1. indicadores */
   h+='<section class="kstrip k4" aria-label="Indicadores da meta de dezembro">'+
-    '<div class="tile hero"><span class="tl-l">Avanço da meta</span><b class="tl-v">'+fmt1.format(fNow)+'%</b><span class="tl-s">realizado em '+br(D)+' · +'+fmt1.format(pct(FM.rec,FM.tot))+' p.p. nos últimos 7 dias</span></div>'+
+    '<div class="tile hero"><span class="tl-l">Avanço da meta</span><b class="tl-v">'+fmt1.format(fNow)+'%</b><span class="tl-s">realizado em '+br(D)+' · +'+fmt1.format(pct(FM.rec,FM.tot))+' p.p. nos últimos 7 dias'+(FM.fora>0?' · inclui '+fmtPP(pct(FM.fora,FM.tot))+' p.p. fora da meta':'')+'</span></div>'+
     tile({l:"Avanço previsto",v:fmt1.format(pf)+'%',s:"linha de base em "+brs(D)})+
     tile({l:"Desvio de prazo",v:(dev>=0?"+":"−")+fmt1.format(Math.abs(dev))+' p.p.',s:dev>=0?"em dia com a linha de base":"atraso equivalente de "+atr+" dias úteis",cls:dev>=0?"st-good":"st-bad",icon:dev>=0?"▲":"▼"})+
-    tile({l:"Trechos concluídos",v:fmt0.format(L0)+' m',s:"de "+fmt0.format(T)+" m · previsto hoje "+fmt0.format(prev)+" m",cls:L0>=prev-0.5?"st-good":"st-bad",icon:L0>=prev-0.5?"▲":"▼"})+
+    tile({l:"Trechos concluídos",v:fmt0.format(L0)+' m',s:"de "+fmt0.format(T)+" m · previsto hoje "+fmt0.format(prev)+" m"+(concFora(D)>0.5?" · "+fmt0.format(concFora(D))+" m fora da meta":""),cls:L0>=prev-0.5?"st-good":"st-bad",icon:L0>=prev-0.5?"▲":"▼"})+
     '</section>';
   h+='<div class="dgrid2 meet">';
   /* 2. curva da meta */
@@ -2175,4 +2178,4 @@ if(window.claude&&window.claude.use){
 }
 })();
 </script>
-<script>(function(){function put(){var b=document.querySelector(".brand");if(!b){return setTimeout(put,200)}if(document.querySelector(".pubtag"))return;var d=document.createElement("div");d.className="pubtag";d.textContent="Página pública · somente leitura · dados de 05/11/2026 08:49";b.appendChild(d)}put()})();</script></body></html>
+<script>(function(){function put(){var b=document.querySelector(".brand");if(!b){return setTimeout(put,200)}if(document.querySelector(".pubtag"))return;var d=document.createElement("div");d.className="pubtag";d.textContent="Página pública · somente leitura · dados de 05/11/2026 11:06";b.appendChild(d)}put()})();</script></body></html>
